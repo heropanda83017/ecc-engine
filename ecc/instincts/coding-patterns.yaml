@@ -1,0 +1,285 @@
+factor: coding-patterns
+last_updated: '2026-06-17'
+description: 编码模式本能 — 记录什么编码实践有效、什么导致 bug
+observations:
+- pattern: atomic-write
+  description: 文件写入必须 .tmp → os.replace
+  benefit: 防止写入中断导致文件损坏
+  discovered: 2026-06-06
+  trigger: V4 Pro review P0-2 (instinct I/O race condition)
+  fix_effort_hours: 0.5
+  confidence: 0.95
+  frequency: always
+- pattern: is-not-none
+  description: 检查权重等数值字段必须用 `is not None` 而非 `and`
+  benefit: 防止 0.0 被 falsy 吞掉
+  discovered: 2026-06-06
+  trigger: V4 Pro review P2 (falsy 0.0 weight)
+  fix_effort_hours: 0.1
+  confidence: 0.9
+  frequency: always
+- pattern: re-read-before-patch
+  description: 每次 patch 前确认当前文件状态，防止嵌套函数/截断
+  benefit: 避免累积式嵌套 bug
+  discovered: 2026-06-06
+  trigger: save_instincts 函数嵌套 + factor_scout.py 截断事故
+  fix_effort_hours: 0.3
+  confidence: 0.85
+  frequency: always
+- pattern: signal-timeout
+  description: 外部资源调用必须设超时 (signal.alarm 或 timeout kwarg)
+  benefit: 防止 baostock 挂死阻塞管线
+  discovered: 2026-06-06
+  trigger: V4 Pro review P0-3 (baostock leak)
+  fix_effort_hours: 0.3
+  confidence: 0.88
+  frequency: always
+- pattern: review-critical（必须修复）
+  description: Critical（必须修复）
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: Critical（必须修复）'
+  fix_effort_hours: 0.5
+  confidence: 0.4
+  frequency: always
+- pattern: review-important（强烈建议修复）
+  description: Important（强烈建议修复）
+  benefit: V4 Pro review 提示
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: Important（强烈建议修复）'
+  fix_effort_hours: 0.2
+  confidence: 0.15
+  frequency: sometimes
+- pattern: review-stage
+  description: 'Stage 2 结论: **REQUEST_CHANGES**'
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: Stage 2 结论: **REQUEST_CHANGES**'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-critical
+  description: CRITICAL
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: CRITICAL'
+  fix_effort_hours: 0.5
+  confidence: 0.9
+  frequency: always
+- pattern: review-important
+  description: IMPORTANT
+  benefit: V4 Pro review 提示
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: IMPORTANT'
+  fix_effort_hours: 0.2
+  confidence: 0.65
+  frequency: sometimes
+- pattern: review-有
+  description: 有
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: 有'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-final
+  description: FINAL REVIEW
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: FINAL REVIEW'
+  fix_effort_hours: 0.5
+  confidence: 0.6
+  frequency: always
+- pattern: review-c1
+  description: C1
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: C1'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-c2
+  description: C2
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: C2'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-c3
+  description: C3
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: C3'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-i1
+  description: I1
+  benefit: V4 Pro review 提示
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: I1'
+  fix_effort_hours: 0.2
+  confidence: 0.15
+  frequency: sometimes
+- pattern: review-i2
+  description: I2
+  benefit: V4 Pro review 提示
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: I2'
+  fix_effort_hours: 0.2
+  confidence: 0.15
+  frequency: sometimes
+- pattern: review-i3
+  description: I3
+  benefit: V4 Pro review 提示
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: I3'
+  fix_effort_hours: 0.2
+  confidence: 0.15
+  frequency: sometimes
+- pattern: review-important（建议修复）
+  description: Important（建议修复）
+  benefit: V4 Pro review 提示
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: Important（建议修复）'
+  fix_effort_hours: 0.2
+  confidence: 0.15
+  frequency: sometimes
+- pattern: review-fail**
+  description: FAIL**
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: FAIL**'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-request_changes**
+  description: REQUEST_CHANGES**
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: REQUEST_CHANGES**'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-minor
+  description: MINOR (建议修复)
+  benefit: V4 Pro review 提示
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: MINOR (建议修复)'
+  fix_effort_hours: 0.2
+  confidence: 0.15
+  frequency: sometimes
+- pattern: review-最终判定：fail
+  description: 最终判定：FAIL
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-13'
+  trigger: 'tri_role final-review retry: 最终判定：FAIL'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-critical（阻断级
+  description: CRITICAL（阻断级
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-14'
+  trigger: 'tri_role final-review retry: CRITICAL（阻断级'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-important（应修复）
+  description: IMPORTANT（应修复）
+  benefit: V4 Pro review 提示
+  discovered: '2026-06-14'
+  trigger: 'tri_role final-review retry: IMPORTANT（应修复）'
+  fix_effort_hours: 0.2
+  confidence: 0.15
+  frequency: sometimes
+- pattern: review-request_changes
+  description: REQUEST_CHANGES
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-14'
+  trigger: 'tri_role final-review retry: REQUEST_CHANGES'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-缺少关键输入
+  description: 缺少关键输入
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-15'
+  trigger: 'tri_role final-review retry: 缺少关键输入'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-审查中断
+  description: 审查中断
+  benefit: V4 Pro review 发现
+  discovered: '2026-06-15'
+  trigger: 'tri_role final-review retry: 审查中断'
+  fix_effort_hours: 0.5
+  confidence: 0.3
+  frequency: always
+- pattern: review-缺少类型标注
+  description: 缺少类型标注, 函数参数无type hints
+  benefit: 'batch_induction 提升 (出现2次, 来自: tri_role_review)'
+  discovered: '2026-06-17'
+  trigger: 🔴 缺少类型标注, 函数参数无type hints
+  fix_effort_hours: 0.5
+  confidence: 0.9
+  frequency: always
+- pattern: review-函数缺少类型标注
+  description: 函数缺少类型标注, 建议添加type hints
+  benefit: 'batch_induction 提升 (出现2次, 来自: tri_role_review)'
+  discovered: '2026-06-17'
+  trigger: 🔴 函数缺少类型标注, 建议添加type hints
+  fix_effort_hours: 0.5
+  confidence: 0.9
+  frequency: always
+- pattern: review-文档字符串缺失
+  description: 文档字符串缺失, 建议添加docstring
+  benefit: 'batch_induction 提升 (出现2次, 来自: tri_role_final)'
+  discovered: '2026-06-17'
+  trigger: 🟡 文档字符串缺失, 建议添加docstring
+  fix_effort_hours: 0.5
+  confidence: 0.9
+  frequency: always
+rationalizations:
+- reason: 这很简单，我不需要规格
+  rebuttal: 简单任务不需要长规格，但仍需要验收标准。两行规格比没有好。
+  when_to_apply: 小改动/单行修复
+  discovered: 2026-06-12
+  source: addyosmani/agent-skills
+- reason: 我会在写完代码后再写规格
+  rebuttal: 那是文档，不是规格。规格的价值在于编码前强制澄清。
+  when_to_apply: 任何代码改动前
+  discovered: 2026-06-12
+  source: addyosmani/agent-skills
+- reason: 规格会拖慢我们
+  rebuttal: 15分钟规格防止数小时返工。15分钟瀑布式规划胜过15小时调试。
+  when_to_apply: 新项目/功能/重大改动前
+  discovered: 2026-06-12
+  source: addyosmani/agent-skills
+- reason: 需求反正会改变
+  rebuttal: 正因如此规格是活的。过时的规格仍然优于没有规格。
+  when_to_apply: 需求可能变化的任何时候
+  discovered: 2026-06-12
+  source: addyosmani/agent-skills
+- reason: 用户知道他们想要什么
+  rebuttal: 即使明确的请求也有隐含假设。规格表面化这些假设。
+  when_to_apply: 用户提需求时
+  discovered: 2026-06-12
+  source: addyosmani/agent-skills
+- reason: 我会边做边想
+  rebuttal: 这就是做出乱码的原因。10分钟规划省小时。
+  when_to_apply: 任何非平凡任务前
+  discovered: 2026-06-12
+  source: addyosmani/agent-skills
+- reason: 任务太明显，写下来是开销
+  rebuttal: 写下来显式化隐藏依赖和被遗忘的边界情况。
+  when_to_apply: 有规格但需要拆解任务时
+  discovered: 2026-06-12
+  source: addyosmani/agent-skills
+- reason: 我能全部记在脑子里
+  rebuttal: 上下文窗口是有限的。书面计划跨会话边界和压缩。
+  when_to_apply: 复杂/多步骤任务
+  discovered: 2026-06-12
+  source: addyosmani/agent-skills
