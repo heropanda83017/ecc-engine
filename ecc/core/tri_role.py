@@ -32,7 +32,7 @@ v3 新增 (2026-06-09): 硬故障恢复 (P3-2)
 
 import os, sys, subprocess, json
 from pathlib import Path
-from coding_scout import record_coding_pattern
+from ecc.instincts.coding_scout import record_coding_pattern
 
 # ── 路径 ──
 from ecc import config
@@ -47,9 +47,13 @@ V4_FLASH_CMD = list(config.FAST_MODEL_CMD)
 FINAL_REVIEW_CMD = V4_FLASH_CMD
 FINAL_REVIEW_FALLBACK_CMD = V4_PRO_CMD
 
+# P2: 停滞检测和重试阈值（可通过环境变量覆盖）
+STAGNATION_JACCARD_THRESHOLD = float(os.environ.get("ECC_STAGNATION_THRESHOLD", "0.6"))
+STAGNATION_MAX_RETRY = int(os.environ.get("ECC_STAGNATION_MAX_RETRY", "2"))
+
 # 映射到 loader
 sys.path.insert(0, str(TEMPLATES))
-from loader import load_prompt, list_roles
+from ecc.core.loader import load_prompt, list_roles
 
 
 def build_prompt(role: str, context: str = "", include_rules: bool = True) -> str:
@@ -147,6 +151,8 @@ def record_trajectory(session_id: str, role: str, verdict: str,
         (BASE / "data").mkdir(parents=True, exist_ok=True)
         with open(TRAJECTORY_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        # P2: 日志轮转检查
+        _rotate_log(TRAJECTORY_FILE)
     except OSError:
         pass  # 日志失败不阻断主流程
 
@@ -302,7 +308,7 @@ def main():
         args.remove("--recover")
         try:
             sys.path.insert(0, str(BASE / "scripts"))
-            from failure_db import FailureDB
+            from ecc.audit.failure_db import FailureDB
             fdb = FailureDB()
             ctx = fdb.recovery_context(role)
             if ctx:
@@ -330,7 +336,7 @@ def main():
     if recover_mode:
         try:
             sys.path.insert(0, str(BASE / "scripts"))
-            from failure_db import FailureDB
+            from ecc.audit.failure_db import FailureDB
             fdb = FailureDB()
             ctx = fdb.recovery_context(role)
             if ctx:
@@ -347,7 +353,7 @@ def main():
     if role == "engine":
         try:
             sys.path.insert(0, str(BASE / "scripts"))
-            from system_maturity import SystemMaturity
+            from ecc.core.system_maturity import SystemMaturity
             for word in context.split():
                 if word.endswith(".py") and SystemMaturity.is_locked(word):
                     print(f"🔒 LOCKED: {word} 是核心组件, 修改需人工确认。跳过自动修改。")
@@ -359,7 +365,7 @@ def main():
     # 当 final-review 返回 CONDITIONAL/FAIL 时，
     # ── errors-as-inputs: 自动重试循环 ──
     # P0-1: 当 --stop-condition 启用时，允许更多重试 + condition 驱动停止
-    MAX_RETRY = 5 if stop_condition_dir else 2
+    MAX_RETRY = STAGNATION_MAX_RETRY + (3 if stop_condition_dir else 0)
     retry_attempt = 0
     last_feedback = ""
     prev_feedback_hash = ""  # P0-3: 前一轮反馈的摘要，用于停滞检测
@@ -419,7 +425,7 @@ def main():
         if multi_model and result.returncode != 0:
             try:
                 sys.path.insert(0, str(BASE / "scripts"))
-                from model_router import ModelRouter as MR
+                from ecc.review.model_router import ModelRouter as MR
                 mm = MR()
                 mm_result = mm.call(role, full_context)
                 if mm_result["verdict"] in ("approved", "conditional"):
@@ -500,7 +506,7 @@ def main():
         # 批量归纳：将审查发现写入暂存区
         try:
             sys.path.insert(0, str(BASE / "scripts"))
-            from batch_induction import BatchInduction
+            from ecc.evolution.batch_induction import BatchInduction
             bi = BatchInduction()
             finding = {
                 "source": f"tri_role_{role}",
@@ -576,11 +582,11 @@ def main():
                 intersection = curr_keywords & prev_keywords
                 union = curr_keywords | prev_keywords
                 jaccard = len(intersection) / len(union) if union else 0
-                if jaccard > 0.6:
+                if jaccard > STAGNATION_JACCARD_THRESHOLD:
                     stagnation_detected = True
                     # P2-2: 记录停滞到 failure_db
                     try:
-                        from failure_db import FailureDB
+                        from ecc.audit.failure_db import FailureDB
                         FailureDB().record(role, session_id, context[:200],
                                            f"停滞检测: Jaccard={jaccard}", verdict="stagnation")
                     except Exception:

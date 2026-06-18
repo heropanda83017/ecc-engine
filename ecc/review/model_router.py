@@ -193,6 +193,38 @@ class ModelRouter:
 
     def __init__(self):
         self.prompt_cache = {}
+        self._health = {}  # P1-2: 模型健康状态
+
+    def health_check(self, model_name: str = None) -> dict:
+        """P1-2: 检查模型健康状态。返回 {model: {status, latency_ms, last_ok}}"""
+        import time
+        results = {}
+        tiers = MODEL_TIERS if model_name is None else [t for t in MODEL_TIERS if t['name'] == model_name]
+        
+        for tier in tiers:
+            name = tier['name']
+            start = time.time()
+            try:
+                r = subprocess.run(
+                    tier['cmd'] + ['-p', 'respond with: ok'],
+                    capture_output=True, text=True, timeout=10
+                )
+                latency = int((time.time() - start) * 1000)
+                ok = r.returncode == 0
+                results[name] = {
+                    'status': 'healthy' if ok else 'unhealthy',
+                    'latency_ms': latency,
+                    'last_ok': ok,
+                    'error': r.stderr[:100] if not ok else None,
+                }
+                if ok:
+                    self._health[name] = {'latency_ms': latency, 'last_ok': time.time()}
+            except subprocess.TimeoutExpired:
+                results[name] = {'status': 'timeout', 'latency_ms': 10000, 'last_ok': False}
+            except Exception as e:
+                results[name] = {'status': 'error', 'error': str(e)[:100], 'last_ok': False}
+        
+        return results
 
     def build_prompt(self, role: str, context: str) -> str:
         """构建完整的审查 prompt（加载角色模板 + rules + 上下文）"""
@@ -345,17 +377,26 @@ def ensemble_review(role: str, context: str,
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="多模型路由与审查")
-    parser.add_argument("role", help="审查角色 (final-review, review, spec-reviewer)")
-    parser.add_argument("context", help="审查上下文")  # we'll accept from stdin too
-    parser.add_argument("--mode", choices=["single", "ensemble"], default="single",
-                        help="single=顺序降级, ensemble=并行投票")
+    parser.add_argument("role", nargs="?", help="审查角色 (final-review, review, spec-reviewer)")
+    parser.add_argument("context", nargs="?", help="审查上下文")
+    parser.add_argument("--mode", choices=["single", "ensemble"], default="single")
     parser.add_argument("--timeout", type=int, default=120, help="每模型超时(秒)")
     parser.add_argument("--json", action="store_true", help="JSON 格式输出")
+    parser.add_argument("--health", action="store_true", help="P1-2: 模型健康检查")
     args = parser.parse_args()
+    
+    if args.health:
+        router = ModelRouter()
+        results = router.health_check()
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+        unhealthy = sum(1 for r in results.values() if r['status'] != 'healthy')
+        sys.exit(2 if unhealthy > 0 else 0)
 
-    context = args.context
+    context = args.context or ""
     if not context and not sys.stdin.isatty():
         context = sys.stdin.read().strip()
+    if not context and not args.health:
+        print("❌ 请提供审查上下文（参数或 stdin）或使用 --health", file=sys.stderr)
 
     if not context:
         print("❌ 请提供审查上下文（参数或 stdin）", file=sys.stderr)

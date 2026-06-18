@@ -20,6 +20,7 @@ evolution_analyzer.py — 可观测性驱动的主动进化分析器
 import json, os, sys, statistics, subprocess
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+import time
 from collections import Counter, defaultdict
 
 # ── 路径 ──
@@ -31,8 +32,20 @@ TRAJECTORY_FILE = config.TRAJECTORY_FILE
 CRON_OUTPUT = config.CRON_OUTPUT
 
 
+# P1-3: 数据文件缓存（避免重复读盘）
+_cache_traces = {"data": None, "ts": 0, "days": -1}
+_cache_trajectory = {"data": None, "ts": 0, "days": -1}
+_CACHE_TTL_S = 30  # 缓存 30 秒
+
+
 def load_traces(days: int = 0) -> list[dict]:
-    """加载 traces_v2.jsonl，可选按天数过滤"""
+    """加载 traces_v2.jsonl，可选按天数过滤（带缓存）"""
+    now = time.time()
+    if (_cache_traces["data"] is not None and
+            now - _cache_traces["ts"] < _CACHE_TTL_S and
+            _cache_traces["days"] == days):
+        return _cache_traces["data"]
+
     if not TRACES_FILE.exists():
         print(f"❌ traces_v2.jsonl 不存在: {TRACES_FILE}", file=sys.stderr)
         return []
@@ -57,10 +70,21 @@ def load_traces(days: int = 0) -> list[dict]:
                 entries.append(d)
             except json.JSONDecodeError:
                 continue
+    _cache_traces["data"] = entries
+    _cache_traces["ts"] = time.time()
+    _cache_traces["days"] = days
+    _cache_trajectory["data"] = entries
+    _cache_trajectory["ts"] = time.time()
+    _cache_trajectory["days"] = days
     return entries
 
 
 def load_trajectory(days: int = 0) -> list[dict]:
+    now = time.time()
+    if (_cache_trajectory["data"] is not None and
+            now - _cache_trajectory["ts"] < _CACHE_TTL_S and
+            _cache_trajectory["days"] == days):
+        return _cache_trajectory["data"]
     """加载 trajectory.jsonl"""
     if not TRAJECTORY_FILE.exists():
         return []

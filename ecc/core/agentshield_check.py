@@ -36,6 +36,7 @@ Returns exit code 0 if clean, 1 if violations found.
 """
 
 import ast
+import hashlib
 import os
 import re
 import sys
@@ -44,6 +45,38 @@ from ecc import config
 
 
 # ── Known-good import sources (projects that legitimately use these libs) ──
+# 增量检查缓存
+_CHECKSUM_CACHE = {}
+
+def _file_checksum(path: str) -> str:
+    """计算文件 SHA256，用于增量检查"""
+    try:
+        h = hashlib.sha256()
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(65536), b''):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return ""
+
+def _load_checksum_cache(cache_path: str) -> dict:
+    """加载增量缓存"""
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
+    return {}
+
+def _save_checksum_cache(cache_path: str, cache: dict):
+    """保存增量缓存"""
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    with open(cache_path + '.tmp', 'w') as f:
+        json.dump(cache, f)
+    os.replace(cache_path + '.tmp', cache_path)
+
+
 KNOWN_GOOD_IMPORTS = {
     "hermes_tools",
     "hermes.skills",
@@ -861,13 +894,48 @@ def check_file(filepath: str) -> list:
     return all_violations
 
 
+def check_file_incremental(filepath: str, cache_dir: str = None) -> tuple[list, bool]:
+    """增量检查：文件未变更时跳过"""
+    cache_dir = cache_dir or os.environ.get('ECC_DATA_DIR', os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data'))
+    cache_path = os.path.join(cache_dir, '.agentshield_cache.json')
+    
+    cache = _load_checksum_cache(cache_path)
+    current_hash = _file_checksum(filepath)
+    
+    if current_hash and cache.get(filepath) == current_hash:
+        return [], True  # 未变更，跳过
+    
+    violations = check_file(filepath)
+    
+    # 更新缓存
+    if current_hash:
+        cache[filepath] = current_hash
+        _save_checksum_cache(cache_path, cache)
+    
+    return violations, False
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 agentshield_check.py <filepath>", file=sys.stderr)
+        print("Usage: python3 agentshield_check.py [--incremental] <filepath>", file=sys.stderr)
         sys.exit(1)
 
-    filepath = sys.argv[1]
-    violations = check_file(filepath)
+    incremental = "--incremental" in sys.argv
+    args = [a for a in sys.argv[1:] if a != "--incremental"]
+    
+    if not args:
+        print("Usage: python3 agentshield_check.py [--incremental] <filepath>", file=sys.stderr)
+        sys.exit(1)
+    
+    filepath = args[0]
+    
+    if incremental:
+        violations, skipped = check_file_incremental(filepath)
+        if skipped:
+            print(f"⏭ SKIP (unchanged): {filepath}")
+            sys.exit(0)
+    else:
+        violations = check_file(filepath)
 
     if not violations:
         print(f"✓ CLEAN: {filepath}")
